@@ -91,6 +91,16 @@ jobs:
   snapshot-ib:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: snapshot-ib
+            base: https://downloads.openwrt.org/snapshots/targets/ramips/mt7621
+            ib: openwrt-imagebuilder-ramips-mt7621.Linux-x86_64
+          - label: release-25.12.6-ib
+            base: https://downloads.openwrt.org/releases/25.12.6/targets/ramips/mt7621
+            ib: openwrt-imagebuilder-25.12.6-ramips-mt7621.Linux-x86_64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,25 +110,40 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gawk gettext git libncurses-dev \
-            libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file wget zstd xsltproc
+            libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file wget zstd xsltproc jq
 
-      - name: Download snapshot ImageBuilder
+      - name: Download ImageBuilder (${{ matrix.label }})
         run: |
-          base=https://downloads.openwrt.org/snapshots/targets/ramips/mt7621
-          wget -q "$base/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst"
+          base="${{ matrix.base }}"
+          ib="${{ matrix.ib }}.tar.zst"
+          wget -q "$base/$ib"
           wget -q "$base/sha256sums"
-          grep 'openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst' sha256sums | sha256sum -c -
+          grep " \*\?$ib\$" sha256sums | sha256sum -c -
           wget -q "$base/version.buildinfo" && cat version.buildinfo || true
           mkdir -p /tmp/ib
-          tar -I zstd -xf openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst -C /tmp/ib
+          tar -I zstd -xf "$ib" -C /tmp/ib
 
-      - name: Try reduced package sets (snapshot ImageBuilder)
-        run: bash .github/ci/try-variants.sh /tmp/ib/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64 "$PWD/variants" snapshot-ib
+      - name: Report default packages and image sizes (${{ matrix.label }})
+        run: |
+          base="${{ matrix.base }}"
+          wget -q "$base/profiles.json" || exit 0
+          {
+            echo "## ${{ matrix.label }} profiles.json"
+            echo
+            echo "- default_packages containing luci: $(jq -r '[.default_packages[] | select(test("luci"))] | join(" ")' profiles.json)"
+            echo "- device_packages: $(jq -r '.profiles["elecom_wrc-2533ghbk2-t"].device_packages | join(" ")' profiles.json)"
+            echo "- images: $(jq -r '.profiles["elecom_wrc-2533ghbk2-t"].images[] | .name' profiles.json | tr '\n' ' ')"
+            echo
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          wget -q -O - "$base/" | grep -o 'elecom_wrc-2533ghbk2-t[^"<]*' | sort -u || true
+
+      - name: Try reduced package sets (${{ matrix.label }})
+        run: bash .github/ci/try-variants.sh "/tmp/ib/${{ matrix.ib }}" "$PWD/variants" "${{ matrix.label }}"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wrc-2533ghbk2-t-variants-snapshot-ib
+          name: wrc-2533ghbk2-t-variants-${{ matrix.label }}
           path: |
             variants/*.md
             variants/*/*wrc-2533ghbk2-t*

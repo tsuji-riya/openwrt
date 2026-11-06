@@ -25,9 +25,12 @@ V6="$V5 -apk-mbedtls"
 W1="-wpad-basic-mbedtls -kmod-mt7615-firmware"
 W2="-wpad-basic-mbedtls wpad-mini"
 W3="$V1 $W2"
+L0="luci"
+L1="$W1 luci"
+L2="$W1 luci-ssl"
 
-names=(v0-default v1-noppp v2-noipv6dhcp v3-nooffload v4-wpadmini v5-nowifi v6-nowifi-noapk w1-nowifi-only w2-wpadmini-only w3-noppp-wpadmini)
-sets=("" "$V1" "$V2" "$V3" "$V4" "$V5" "$V6" "$W1" "$W2" "$W3")
+names=(v0-default v1-noppp v2-noipv6dhcp v3-nooffload v4-wpadmini v5-nowifi v6-nowifi-noapk w1-nowifi-only w2-wpadmini-only w3-noppp-wpadmini l0-default-luci l1-nowifi-luci l2-nowifi-luci-ssl)
+sets=("" "$V1" "$V2" "$V3" "$V4" "$V5" "$V6" "$W1" "$W2" "$W3" "$L0" "$L1" "$L2")
 
 {
 	echo "## $LABEL"
