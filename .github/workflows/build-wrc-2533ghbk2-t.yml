@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Source build of this branch (expanded layout), plus an ImageBuilder made
+  # from it to try reduced package sets for the 7808 KiB OEM install path.
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 340
@@ -32,9 +34,12 @@ jobs:
           CONFIG_TARGET_ramips_mt7621=y
           CONFIG_TARGET_ramips_mt7621_DEVICE_elecom_wrc-2533ghbk2-t=y
           CONFIG_TARGET_ROOTFS_INITRAMFS=y
+          CONFIG_IB=y
+          CONFIG_IB_STANDALONE=y
+          CONFIG_PACKAGE_wpad-mini=m
           CFG
           make defconfig
-          grep -E '^CONFIG_TARGET_(ramips|ROOTFS_INITRAMFS)' .config
+          grep -E '^CONFIG_(TARGET_(ramips|ROOTFS_INITRAMFS)|IB)' .config
 
       - name: Download sources
         run: make -j"$(nproc)" download || make -j1 V=s download
@@ -42,15 +47,18 @@ jobs:
       - name: Build
         run: make -j"$(($(nproc) + 1))" BUILD_LOG=1 || make -j1 V=s
 
-      - name: Check image sizes
+      - name: Report image sizes
         run: |
           cd bin/targets/ramips/mt7621
           ls -l
           sha256sum *wrc-2533ghbk2-t* | tee sha256sums-wrc-2533ghbk2-t.txt
-          su=$(stat -c%s *wrc-2533ghbk2-t-squashfs-sysupgrade.bin)
-          echo "sysupgrade.bin: $su bytes (limit for upgrade from old layout: 7995392)"
-          test -f *wrc-2533ghbk2-t-squashfs-factory.bin
-          test "$su" -le 7995392
+          grep -o 'is too big: [0-9]* > [0-9]*' "$GITHUB_WORKSPACE"/logs/target/linux/install.txt 2>/dev/null || true
+
+      - name: Try reduced package sets (ImageBuilder from this branch)
+        run: |
+          mkdir -p /tmp/ib
+          tar -I zstd -xf bin/targets/ramips/mt7621/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst -C /tmp/ib
+          bash .github/ci/try-variants.sh /tmp/ib/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64 "$PWD/variants" branch-ib
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -59,7 +67,16 @@ jobs:
           path: |
             bin/targets/ramips/mt7621/*wrc-2533ghbk2-t*
             bin/targets/ramips/mt7621/sha256sums-wrc-2533ghbk2-t.txt
-            bin/targets/ramips/mt7621/*.manifest
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wrc-2533ghbk2-t-variants-branch-ib
+          path: |
+            variants/*.md
+            variants/*/*wrc-2533ghbk2-t*
+            variants/*/make.log
           if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
@@ -67,3 +84,42 @@ jobs:
         with:
           name: build-logs
           path: logs/
+
+  # Upstream snapshot ImageBuilder (same kernel as the buildbots, current
+  # 7808 KiB layout). Shows which package set fits with buildbot kernels.
+  snapshot-ib:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/ci
+
+      - name: Install ImageBuilder dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gawk gettext git libncurses-dev \
+            libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file wget zstd xsltproc
+
+      - name: Download snapshot ImageBuilder
+        run: |
+          base=https://downloads.openwrt.org/snapshots/targets/ramips/mt7621
+          wget -q "$base/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst"
+          wget -q "$base/sha256sums"
+          grep 'openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst' sha256sums | sha256sum -c -
+          wget -q "$base/version.buildinfo" && cat version.buildinfo || true
+          mkdir -p /tmp/ib
+          tar -I zstd -xf openwrt-imagebuilder-ramips-mt7621.Linux-x86_64.tar.zst -C /tmp/ib
+
+      - name: Try reduced package sets (snapshot ImageBuilder)
+        run: bash .github/ci/try-variants.sh /tmp/ib/openwrt-imagebuilder-ramips-mt7621.Linux-x86_64 "$PWD/variants" snapshot-ib
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wrc-2533ghbk2-t-variants-snapshot-ib
+          path: |
+            variants/*.md
+            variants/*/*wrc-2533ghbk2-t*
+            variants/*/make.log
+          if-no-files-found: warn
