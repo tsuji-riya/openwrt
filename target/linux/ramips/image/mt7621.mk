@@ -1436,12 +1436,15 @@ define Device/elecom_wrc-2533ghbk2-t
   $(Device/uimage-lzma-loader)
   DEVICE_VENDOR := ELECOM
   DEVICE_MODEL := WRC-2533GHBK2-T
-  IMAGE_SIZE := 7808k
+  IMAGE_SIZE := 16064k
   IMAGES += factory.bin
-  IMAGE/factory.bin := $$(sysupgrade_bin) | check-size | \
+  IMAGE/factory.bin := $$(sysupgrade_bin) | check-size 7808k | \
 	elx-header 0107003b 8844A2D168B45A2D | \
 	elecom-product-header WRC-2533GHBK2-T
   DEVICE_PACKAGES := kmod-mt7615-firmware -uboot-envtools
+  DEVICE_COMPAT_VERSION := 2.0
+  DEVICE_COMPAT_MESSAGE := Firmware partition has been expanded to 16064KiB. \
+	Use sysupgrade -F from the old layout; that image must not exceed 7808KiB.
 endef
 TARGET_DEVICES += elecom_wrc-2533ghbk2-t
 
