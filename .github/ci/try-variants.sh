@@ -22,9 +22,12 @@ V3="$V2 -kmod-crypto-hw-eip93 -kmod-nft-offload"
 V4="$V3 -wpad-basic-mbedtls wpad-mini"
 V5="$V3 -wpad-basic-mbedtls -kmod-mt7615-firmware"
 V6="$V5 -apk-mbedtls"
+W1="-wpad-basic-mbedtls -kmod-mt7615-firmware"
+W2="-wpad-basic-mbedtls wpad-mini"
+W3="$V1 $W2"
 
-names=(v0-default v1-noppp v2-noipv6dhcp v3-nooffload v4-wpadmini v5-nowifi v6-nowifi-noapk)
-sets=("" "$V1" "$V2" "$V3" "$V4" "$V5" "$V6")
+names=(v0-default v1-noppp v2-noipv6dhcp v3-nooffload v4-wpadmini v5-nowifi v6-nowifi-noapk w1-nowifi-only w2-wpadmini-only w3-noppp-wpadmini)
+sets=("" "$V1" "$V2" "$V3" "$V4" "$V5" "$V6" "$W1" "$W2" "$W3")
 
 {
 	echo "## $LABEL"

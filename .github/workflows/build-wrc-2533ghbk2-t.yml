@@ -10,6 +10,7 @@ jobs:
   # Source build of this branch (expanded layout), plus an ImageBuilder made
   # from it to try reduced package sets for the 7808 KiB OEM install path.
   build:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-build]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     steps:
