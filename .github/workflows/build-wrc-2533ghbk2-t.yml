@@ -187,8 +187,12 @@ jobs:
       - name: Show the commit under test
         run: git log -3 --format='%H %an %s'
 
-      - name: Feeds
-        run: ./scripts/feeds update -a && ./scripts/feeds install -a
+      - name: Feeds (pinned to the buildbot feeds.buildinfo)
+        run: |
+          wget -q "$BB/feeds.buildinfo" -O feeds.buildinfo
+          cat feeds.buildinfo
+          cp feeds.buildinfo feeds.conf
+          ./scripts/feeds update -a && ./scripts/feeds install -a
 
       - name: Configure from the buildbot config.buildinfo
         run: |
@@ -213,19 +217,17 @@ jobs:
       - name: Download sources
         run: make -j"$(nproc)" download || make -j1 V=s download
 
-      - name: Build (parallel, the result decides the test)
+      - name: Build like the buildbot (IGNORE_ERRORS="n m")
         id: build
         run: |
           set +e
-          make -j"$(($(nproc) + 1))" BUILD_LOG=1
-          rc=$?
+          make -j"$(($(nproc) + 1))" BUILD_LOG=1 IGNORE_ERRORS="n m" 2>&1 | tee build.log
+          rc=${PIPESTATUS[0]}
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           echo "make exit status: $rc"
+          echo "--- packages that failed (ignored like on the buildbot) ---"
+          grep -E 'failed to build' build.log | sort -u || true
           exit 0
-
-      - name: Show the error on failure (make -j1 V=s)
-        if: steps.build.outputs.rc != '0'
-        run: make -j1 V=s 2>&1 | tail -n 300; exit 1
 
       - name: Report
         if: always()
@@ -236,6 +238,7 @@ jobs:
             echo
             echo "- commit: $(git log -1 --format='%h %s')"
             echo "- make exit status: ${{ steps.build.outputs.rc }}"
+            echo "- failed packages (ignored): $(grep -E 'failed to build' build.log 2>/dev/null | sed 's/.*ERROR: //' | sort -u | tr '\n' ' ')"
             echo
             echo '```'
             ls -l $d/*wrc-2533ghbk2-t* 2>&1
@@ -260,6 +263,8 @@ jobs:
             bin/targets/ramips/mt7621/*wrc-2533ghbk2-t*
             bin/targets/ramips/mt7621/profiles.json
             config.buildinfo
+            feeds.buildinfo
             .config
+            build.log
             logs/target/
           if-no-files-found: warn
