@@ -137,6 +137,9 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           wget -q -O - "$base/" | grep -o 'elecom_wrc-2533ghbk2-t[^"<]*' | sort -u || true
 
+      - name: Reproduce Firmware Selector build (${{ matrix.label }})
+        run: bash .github/ci/fs-repro.sh "/tmp/ib/${{ matrix.ib }}" "$PWD/variants" "${{ matrix.label }}"
+
       - name: Try reduced package sets (${{ matrix.label }})
         run: bash .github/ci/try-variants.sh "/tmp/ib/${{ matrix.ib }}" "$PWD/variants" "${{ matrix.label }}"
 
